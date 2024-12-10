@@ -1,0 +1,1 @@
+Data = [speed, aileron_rms, elevator_rms, rudder_rms, deviation_rms, pitch_rms, retract_flaps_reaction_time, retract_gear_reaction_time, rotation_reaction_time]

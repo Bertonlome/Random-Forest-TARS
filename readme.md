@@ -45,3 +45,5 @@ This project simulates an autonomous copilot agent that collaborates with a huma
   - `pickle` (for loading the Random Forest model)
   - `pyttsx3` (for speech synthesis of the announces)
 
+### Acknowledgements
+This software uses [scikit-learn](https://scikit-learn.org/), which is licensed under the BSD 3-Clause License.

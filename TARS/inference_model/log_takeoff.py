@@ -1,10 +1,111 @@
 import time
-import xpc
 import numpy as np
 import csv
 import math
-from geopy.distance import geodesic
 import classifier
+import sys
+import ingescape as igs
+
+
+# Constants
+start_lat = 43.4685335227
+start_lon = -1.5103003026
+runway_heading = 269.4  # Heading of the runway in degrees (West)
+
+#inputs
+lat = None
+long = None
+yokeRoll = None
+yokePitch = None
+yokeYaw = None
+pitch = None
+airspeed = None
+throttle = None
+verticalSpeed = None
+altitude = None
+heading = None
+flaps = None
+gear = None
+#outputs
+inference = None
+
+
+#inputs
+def input_callback(iop_type, name, value_type, value, my_data):
+    global lat, long, yokeRoll, yokePitch, yokeYaw, pitch, airspeed, throttle, verticalSpeed, altitude, heading, flaps, gear
+    if name == "lat":
+        lat = value
+    elif name == "long":
+        long = value
+    elif name == "yokeRoll":
+        yokeRoll = value
+    elif name == "yokePitch":
+        yokePitch = value
+    elif name == "yokeYaw":
+        yokeYaw = value
+    elif name == "pitch":
+        pitch = value
+    elif name == "airspeed":
+        airspeed = value
+    elif name == "throttle":
+        throttle = value
+    elif name == "verticalSpeed":
+        verticalSpeed = value
+    elif name == "altitude":
+        altitude = value
+    elif name == "heading":
+        heading = value
+    elif name == "flaps":
+        flaps = value
+    elif name == "gear":
+        gear = value
+
+refresh_rate = 0.01
+port = 5670
+agent_name = "Control_Inference"
+device = "wlo1"
+verbose = False
+is_interrupted = False
+
+igs.agent_set_name(agent_name)
+igs.definition_set_version("1.0")
+igs.log_set_console(True)
+igs.log_set_file(True, None)
+igs.set_command_line(sys.executable + " " + " ".join(sys.argv))
+
+
+igs.input_create("lat", igs.DOUBLE_T, None)
+igs.input_create("long", igs.DOUBLE_T, None)
+igs.input_create("yokeRoll", igs.DOUBLE_T, None)
+igs.input_create("yokePitch", igs.DOUBLE_T, None)
+igs.input_create("yokeYaw", igs.DOUBLE_T, None)
+igs.input_create("pitch", igs.DOUBLE_T, None)
+igs.input_create("airspeed", igs.DOUBLE_T, None)
+igs.input_create("throttle", igs.DOUBLE_T, None)
+igs.input_create("verticalSpeed", igs.DOUBLE_T, None)
+igs.input_create("altitude", igs.DOUBLE_T, None)
+igs.input_create("heading", igs.DOUBLE_T, None)
+igs.input_create("flaps", igs.DOUBLE_T, None)
+igs.input_create("gear", igs.DOUBLE_T, None)
+
+igs.output_create("inference", igs.BOOL_T, None)
+
+igs.observe_input("lat", input_callback, None)
+igs.observe_input("long", input_callback, None)
+igs.observe_input("yokeRoll", input_callback, None)
+igs.observe_input("yokePitch", input_callback, None)
+igs.observe_input("yokeYaw", input_callback, None)
+igs.observe_input("pitch", input_callback, None)
+igs.observe_input("airspeed", input_callback, None)
+igs.observe_input("throttle", input_callback, None)
+igs.observe_input("verticalSpeed", input_callback, None)
+igs.observe_input("altitude", input_callback, None)
+igs.observe_input("heading", input_callback, None)
+igs.observe_input("flaps", input_callback, None)
+igs.observe_input("gear", input_callback, None)
+
+igs.start_with_device(device, port)
+
 # Haversine formula to compute the distance between two points
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371  # Earth radius in km
@@ -37,27 +138,6 @@ def compute_centerline_deviation(start_lat, start_lon, runway_heading, plane_lat
     
     return deviation
 
-def send_birds():
-    with xpc.XPlaneConnect() as client:
-        # Send the mighty birds
-        print("Birds incoming ! :)")
-        bird_dref = "sim/operation/failures/rel_bird_strike"
-        client.sendDREF(bird_dref, 2)
-
-def get_lat():
-    with xpc.XPlaneConnect() as client:
-        lat = client.getDREF("sim/flightmodel/position/latitude")[0]
-        return lat
-
-def get_long():
-    with xpc.XPlaneConnect() as client:
-        long = client.getDREF("sim/flightmodel/position/longitude")[0]
-        return long
-
-start_lat = 43.4685335227
-start_lon = -1.5103003026
-runway_heading = 269.4  # Heading of the runway in degrees (West)
-
 def compute_rms(values):
     """Compute RMS of a list of values."""
     if len(values) == 0:
@@ -65,56 +145,38 @@ def compute_rms(values):
     return math.sqrt(sum(x**2 for x in values) / len(values))
 
 
-def get_control_inputs():
-    with xpc.XPlaneConnect() as client:
-        aileron = client.getDREF("sim/cockpit2/controls/yoke_roll_ratio")[0]
-        elevator = client.getDREF("sim/cockpit2/controls/yoke_pitch_ratio")[0]
-        rudder = client.getDREF("sim/cockpit2/controls/yoke_heading_ratio")[0]
-        return aileron, elevator, rudder
-    
-def get_position():
-    with xpc.XPlaneConnect() as client:
-        local_x = client.getDREF("sim/flightmodel/position/local_x")[0]
-        local_y = client.getDREF("sim/flightmodel/position/local_y")[0]
-        return local_x, local_y
-
-def get_pitch():
-    pitch = get_dref("sim/cockpit2/gauges/indicators/pitch_AHARS_deg_pilot")
-    return pitch,
+def log_data(features):
+    with open("takeoff_data.csv", mode="a", newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(features)
 
 def reaction_time_to_vrotate():
-    pitch = get_pitch()[0]
+    global pitch
     if pitch > 1:  # Aircraft begins to rotate
         return time.time()  # Calculate reaction time in seconds
     else:
         return 0
 
 def reaction_time_to_retract_flaps():
-    with xpc.XPlaneConnect() as client:
-        flaps = client.getDREF("sim/cockpit2/controls/flap_ratio")[0]
-        if flaps < 0.5:
-            # Log the time at which speed crosses 120 knots
-            return time.time()
-        else:
-            return 0
+    global flaps
+    if flaps < 0.5:
+        # Log the time at which speed crosses 120 knots
+        return time.time()
+    else:
+        return 0
 
 def reaction_time_to_retract_gear():
-    with xpc.XPlaneConnect() as client:
-        gear_handle_status = client.getDREF("sim/cockpit/switches/gear_handle_status")[0]
-        if gear_handle_status == 0:  # Positive rate of climb
-            # Log the time for gear retraction event
-            return time.time()
-        else:
-            return 0
-
-
-def log_data(features):
-    with open("takeoff_data.csv", mode="a", newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(features)
+    global gear
+    gear_handle_status = gear
+    if gear_handle_status == 0:  # Positive rate of climb
+        # Log the time for gear retraction event
+        return time.time()
+    else:
+        return 0
 
 # Example of how to collect and log features:
-def main(result_queue, eng_fail_aft_v1):
+def main():
+    global lat, long, yokeRoll, yokePitch, yokeYaw, pitch, airspeed, throttle, verticalSpeed, altitude, inference, heading
 
     # Histories for inputs and deviation
     input_history = {"aileron": [], "elevator": [], "rudder": []}
@@ -141,34 +203,27 @@ def main(result_queue, eng_fail_aft_v1):
 
     print("INITIALIZATION...")
     while startFlag == False:
-        throttle_position = get_dref("Mustang/cockpit/engine/l_throttle")
+        throttle_position = throttle
         if throttle_position == 1:
             startFlag = True
             print("START!")
         time.sleep(0.01)
 
+    start_lat = lat
+    start_lon = long
+    runway_heading = heading
     #startTime_for_perf = 0
     #startTime = time.time()
     while True and end == False:
         time.sleep(0.01)
 
-        speed = int(get_dref("sim/cockpit2/gauges/indicators/airspeed_kts_pilot")) - 5
+        speed = int(airspeed - 5)
 
-        if eng_fail_aft_v1 == True and speed > 130 and failure_flag == False:
-            send_birds()
-            failure_flag = True
-        
-        if eng_fail_aft_v1 == False and 65 < speed < 80 and failure_flag == False:
-            send_birds()
-            failure_flag = True
+        deviation = compute_centerline_deviation(start_lat, start_lon, runway_heading, lat, long)
 
-
-        aileron, elevator, rudder = get_control_inputs()
-        deviation = compute_centerline_deviation(start_lat, start_lon, runway_heading, get_lat(), get_long())
-
-        input_history["aileron"].append(aileron)
-        input_history["elevator"].append(elevator)
-        input_history["rudder"].append(rudder)
+        input_history["aileron"].append(yokeRoll)
+        input_history["elevator"].append(yokePitch)
+        input_history["rudder"].append(yokeYaw)
         deviation_history.append(deviation)
 
 
@@ -196,12 +251,8 @@ def main(result_queue, eng_fail_aft_v1):
                 final_retract_flaps_reaction_time = retract_flaps_reaction_time - v_two_time
                 print(f"flaps retractation reaction time = {final_retract_flaps_reaction_time}")
 
-
-
-
-        vertical_speed = get_dref("sim/cockpit2/gauges/indicators/vvi_fpm_copilot")
         
-        if vertical_speed >= 300 and retract_gear_flag == False:
+        if verticalSpeed >= 300 and retract_gear_flag == False:
             print("Time to remove the shoes!")
             positive_rate_time = time.time()
             retract_gear_flag = True
@@ -215,13 +266,7 @@ def main(result_queue, eng_fail_aft_v1):
                 print(f"Gear retractation reaction time = {final_retract_gear_reaction_time}")
 
         if calculate_pitch_flag == True:
-            pitch = get_pitch()[0]
             pitch_history.append(pitch - 10) #10 = target
-
-        
-
-        
-
 
         if speed % 10 == 0 and speed != speed_just_done:
             
@@ -236,9 +281,13 @@ def main(result_queue, eng_fail_aft_v1):
             # Collect all features
             features = [speed, aileron_rms, elevator_rms, rudder_rms, deviation_rms, pitch_rms, final_retract_flaps_reaction_time, final_retract_gear_reaction_time, final_rotation_reaction_time]
             myClass = classifier.classify_new_data(features)
-            result_queue.put(myClass)
-            if myClass == 0: myClass_string = "NOVICE" 
-            else: myClass_string = "EXPERT" 
+            if myClass == 0: 
+                myClass_string = "NOVICE"
+                igs.output_set_bool("inference", False)
+            else: 
+                myClass_string = "EXPERT"
+                igs.output_set_bool("inference", True)
+
             print(f"Classification: {myClass_string}")
             log_data(features)
 
@@ -249,13 +298,9 @@ def main(result_queue, eng_fail_aft_v1):
             #startTime_for_perf = time.time()
             speed_just_done = speed
 
-        if get_dref("Mustang/alt_ft") > 1500:
+        if altitude > 1500:
             end = True
 
+main()
+igs.stop()
 
-def get_dref(arg):
-    with xpc.XPlaneConnect() as client:
-        #get a dref
-        dref = arg
-        myValue = client.getDREF(dref)[0]
-        return myValue

@@ -1,6 +1,6 @@
 import time
 import xpc
-from log_takeoff import get_dref
+from inference_model.log_takeoff import get_dref
 
 def get_IAS():
     with xpc.XPlaneConnect() as client:

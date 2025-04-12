@@ -1,0 +1,12 @@
+{
+    "departure_airport": "",
+    "arrival_airport": "",
+    "flight_rules": "",
+    "v1_speed": "70",
+    "vr_speed": "90",
+    "v2_speed": "110",
+    "safe_altitude": "1500",
+    "aviate": "Aviate: Pilot",
+    "navigate": "Navigate: Pilot",
+    "communicate": "Communicate: Pilot"
+}
